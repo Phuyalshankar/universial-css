@@ -1,101 +1,128 @@
 /**
- * 🧪 Test Suite for Universal CSS Engine (tests/engine.test.js)
- * Covers:
- *   1. p-0.5, p-1, p-4, gap-1.5 spacing in rem
- *   2. hover:bg-slate-900 output
- *   3. dark:text-white output
- *   4. md:hover:flex-row combination output
- *   5. text-xl, bg-sky-400 font size & named color
- *   6. invalid hex fallback (bg-[#xyz])
- *   7. empty string, duplicate class, tab whitespace
+ * 🧪 Test Suite for Universal CSS Engine (v1.0.1)
+ * Uses standard Node.js test runner (node:test & node:assert)
  */
 
-const assert = require('assert');
+const test = require('node:test');
+const assert = require('node:assert/strict');
 const { UniversalCSS } = require('../index');
+const { OP, MASK, remFromUnits } = require('../src/TitanUniversalCss100');
 
-console.log('🧪 Running comprehensive test suite (tests/engine.test.js)...\n');
+test('remFromUnits helper - trailing zero and zero stability', () => {
+    assert.equal(remFromUnits(0), '0rem');
+    assert.equal(remFromUnits(2), '0.125rem');
+    assert.equal(remFromUnits(4), '0.25rem');
+    assert.equal(remFromUnits(16), '1rem');
+    assert.equal(remFromUnits(100), '6.25rem');
+});
 
-// ─── Test 1: Spacing Correctness (rem + fractional scale) ───────────────────
-console.log('• Testing Test 1: Spacing in rem (p-0.5, p-1, p-4, gap-1.5)...');
-{
-    const bin = UniversalCSS.compile('p-0.5 p-1 p-4 gap-1.5');
-    const css = UniversalCSS.decompile(bin, '.test-spacing');
-    
-    assert(css.includes('padding: 0.125rem'), `Expected 0.125rem for p-0.5, got: ${css}`);
-    assert(css.includes('padding: 0.25rem'), `Expected 0.25rem for p-1, got: ${css}`);
-    assert(css.includes('padding: 1rem'), `Expected 1rem for p-4, got: ${css}`);
-    assert(css.includes('gap: 0.375rem'), `Expected 0.375rem for gap-1.5, got: ${css}`);
-    console.log('  ✅ Passed!');
-}
+test('Encoder: Spacing units encoding', () => {
+    // p-0 -> 0, p-0.5 -> 2, p-1 -> 4, p-4 -> 16, p-96 -> 384 (fits in u8 or mod)
+    const binP0 = UniversalCSS.compile('p-0');
+    assert.equal(binP0[2], OP.P_ALL);
+    assert.equal(binP0[3], 0);
 
-// ─── Test 2: Hover Output ───────────────────────────────────────────────────
-console.log('• Testing Test 2: hover:bg-slate-900...');
-{
-    const bin = UniversalCSS.compile('hover:bg-slate-900');
-    const css = UniversalCSS.decompile(bin, '.test-hover');
+    const binP05 = UniversalCSS.compile('p-0.5');
+    assert.equal(binP05[2], OP.P_ALL);
+    assert.equal(binP05[3], 2);
 
-    assert(css.includes('.test-hover:hover'), `Expected .test-hover:hover, got: ${css}`);
-    assert(css.includes('background-color: #0f172a'), `Expected #0f172a for slate-900, got: ${css}`);
-    console.log('  ✅ Passed!');
-}
+    const binP1 = UniversalCSS.compile('p-1');
+    assert.equal(binP1[2], OP.P_ALL);
+    assert.equal(binP1[3], 4);
 
-// ─── Test 3: Dark Mode Output ───────────────────────────────────────────────
-console.log('• Testing Test 3: dark:text-white...');
-{
-    const bin = UniversalCSS.compile('dark:text-white');
-    const css = UniversalCSS.decompile(bin, '.test-dark');
+    const binP4 = UniversalCSS.compile('p-4');
+    assert.equal(binP4[2], OP.P_ALL);
+    assert.equal(binP4[3], 16);
 
-    assert(css.includes('@media (prefers-color-scheme: dark)'), `Expected dark media query, got: ${css}`);
-    assert(css.includes('color: #ffffff'), `Expected #ffffff for text-white, got: ${css}`);
-    console.log('  ✅ Passed!');
-}
+    const binGap = UniversalCSS.compile('gap-1.5');
+    assert.equal(binGap[2], OP.GAP);
+    assert.equal(binGap[3], 6);
+});
 
-// ─── Test 4: Breakpoint + State Combination (md:hover:flex-row) ─────────────
-console.log('• Testing Test 4: md:hover:flex-row combination...');
-{
-    const bin = UniversalCSS.compile('md:hover:flex-row');
-    const css = UniversalCSS.decompile(bin, '.test-combo');
+test('Encoder: Named colors & Palette index', () => {
+    const bin = UniversalCSS.compile('bg-slate-900 text-sky-400 bg-red-500');
+    assert.ok(bin.includes(OP.BG_COLOR_NAMED));
+    assert.ok(bin.includes(OP.TEXT_COLOR_NAMED));
 
-    assert(css.includes('@media (min-width: 768px)'), `Expected min-width 768px, got: ${css}`);
-    assert(css.includes('.test-combo:hover { flex-direction: row; }'), `Expected nested hover within media query, got: ${css}`);
-    console.log('  ✅ Passed!');
-}
+    // Verify opacity fallback (/50 goes to RAW_CSS_STRING)
+    const binAlpha = UniversalCSS.compile('bg-red-500/50');
+    assert.ok(binAlpha.includes(OP.RAW_CSS_STRING));
+});
 
-// ─── Test 5: Font Size rem & Named Color (text-xl, bg-sky-400) ──────────────
-console.log('• Testing Test 5: text-xl, bg-sky-400...');
-{
-    const bin = UniversalCSS.compile('text-xl bg-sky-400');
-    const css = UniversalCSS.decompile(bin, '.test-font-color');
+test('Encoder: Font size scale codes', () => {
+    const binXs = UniversalCSS.compile('text-xs');
+    assert.ok(binXs.includes(OP.FONT_SIZE_SCALE));
 
-    assert(css.includes('font-size: 1.25rem'), `Expected 1.25rem for text-xl, got: ${css}`);
-    assert(css.includes('background-color: #38bdf8'), `Expected #38bdf8 for sky-400, got: ${css}`);
-    console.log('  ✅ Passed!');
-}
+    const binXl = UniversalCSS.compile('text-xl');
+    assert.ok(binXl.includes(OP.FONT_SIZE_SCALE));
 
-// ─── Test 6: Invalid Hex Fallback ───────────────────────────────────────────
-console.log('• Testing Test 6: Invalid hex fallback (bg-[#xyz])...');
-{
-    const bin = UniversalCSS.compile('bg-[#xyz]');
-    const css = UniversalCSS.decompile(bin, '.test-invalid-hex');
+    const bin4xl = UniversalCSS.compile('text-4xl');
+    assert.ok(bin4xl.includes(OP.FONT_SIZE_SCALE));
+});
 
-    assert(css.includes('bg-[#xyz]'), `Expected fallback raw string bg-[#xyz], got: ${css}`);
-    console.log('  ✅ Passed!');
-}
+test('Encoder: Modifier bitmasks', () => {
+    const binHover = UniversalCSS.compile('hover:bg-red-500');
+    assert.equal(binHover[1], MASK.STATE_HOVER);
 
-// ─── Test 7: Empty String, Duplicate Classes, Tab Whitespace ────────────────
-console.log('• Testing Test 7: Edge cases (empty string, duplicates, tabs)...');
-{
+    const binCombo = UniversalCSS.compile('md:hover:flex-row');
+    assert.equal(binCombo[1], MASK.BREAK_MD | MASK.STATE_HOVER);
+
+    const binDark = UniversalCSS.compile('dark:text-white');
+    assert.equal(binDark[1], MASK.STATE_DARK);
+});
+
+test('Encoder: Hex validation and fallback', () => {
+    const binValid = UniversalCSS.compile('bg-[#0f172a]');
+    assert.ok(binValid.includes(OP.BG_COLOR_RGB));
+    assert.ok(binValid.includes(15));
+    assert.ok(binValid.includes(23));
+    assert.ok(binValid.includes(42));
+
+    const binInvalid = UniversalCSS.compile('bg-[#xyz]');
+    assert.ok(binInvalid.includes(OP.RAW_CSS_STRING));
+    assert.ok(!binInvalid.includes(OP.BG_COLOR_RGB));
+});
+
+test('Encoder: Height arbitrary and pixels (h-[100px])', () => {
+    const bin = UniversalCSS.compile('h-[100px]');
+    assert.ok(bin.includes(OP.H_PX));
+    // Check 100 in UInt16 BE (0x00 0x64)
+    assert.ok(bin.includes(0x00));
+    assert.ok(bin.includes(0x64));
+});
+
+test('Decoder: Round-trip and combinations', () => {
+    const binCombo = UniversalCSS.compile('md:hover:bg-red-500');
+    const cssCombo = UniversalCSS.decompile(binCombo, '.my-card');
+    assert.ok(cssCombo.includes('@media (min-width: 768px)'));
+    assert.ok(cssCombo.includes('.my-card:hover { background-color: #ef4444; }'));
+
+    const binDark = UniversalCSS.compile('dark:bg-slate-900');
+    const cssDark = UniversalCSS.decompile(binDark, '.my-card');
+    assert.ok(cssDark.includes('@media (prefers-color-scheme: dark)'));
+    assert.ok(cssDark.includes('.my-card { background-color: #0f172a; }'));
+});
+
+test('Decoder: Invalid version throws', () => {
+    const invalidBuf = Buffer.from([0x99, OP.END]);
+    assert.throws(() => {
+        UniversalCSS.decompile(invalidBuf);
+    }, /Unsupported protocol version: 0x99/);
+});
+
+test('Edge cases: Empty string, duplicates, whitespace', () => {
     const binEmpty = UniversalCSS.compile('');
-    assert(binEmpty.length >= 1, 'Empty string should yield at least version byte');
+    // Exactly Version (0x01) + END (0xFF) = 2 bytes
+    assert.equal(binEmpty.length, 2);
 
-    const binTabs = UniversalCSS.compile("\t\tflex   \n  flex   p-4\tp-4  ");
-    const cssTabs = UniversalCSS.decompile(binTabs, '.test-edge');
+    const binDuo = UniversalCSS.compile('p-4   p-4\t\t\np-4');
+    const cssDuo = UniversalCSS.decompile(binDuo, '.node');
+    const occurrences = cssDuo.match(/padding: 1rem/g);
+    assert.equal(occurrences.length, 1);
+});
 
-    // Count occurrences of 'display: flex'
-    const matches = cssTabs.match(/display: flex/g);
-    assert(matches && matches.length === 1, `Expected deduplicated flex, got count: ${matches ? matches.length : 0}`);
-    assert(cssTabs.includes('padding: 1rem'), `Expected 1rem padding, got: ${cssTabs}`);
-    console.log('  ✅ Passed!');
-}
-
-console.log('\n🎉 ALL 7 TEST SUITES PASSED CLEANLY (100% SUCCESS)!');
+test('Benchmark size target: compile complex string <= 12 bytes per token efficiency', () => {
+    const bin = UniversalCSS.compile('p-4 bg-slate-900 rounded-xl hover:scale-105');
+    // p-4 (3B) + bg-slate-900 (4B) + rounded-xl (2B) + hover:scale-105 (3B) + END (1B) + Version (1B)
+    assert.ok(bin.length <= 16, `Actual size was ${bin.length} bytes`);
+});

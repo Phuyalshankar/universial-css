@@ -65,14 +65,19 @@ Bit:   7   6   5   4   3   2   1   0
 | `0x08` | `FLEX_DIR_COL` | None | Flex col | `flex-direction: column` |
 | `0x1A` | `GAP` | `1B UInt8` (quarter units) | Gap spacing | `gap: 0.375rem` (for `gap-1.5`) |
 | `0x20` | `M_ALL` | `1B UInt8` | Margin all | `margin: 1rem` (for `m-4`) |
+| `0x21` | `MT` | `1B UInt8` | Margin top | `margin-top: 0.5rem` (for `mt-2`) |
 | `0x28` | `P_ALL` | `1B UInt8` | Padding all | `padding: 0.25rem` (for `p-1`) |
 | `0x40` | `W_FULL` | None | Width 100% | `width: 100%` |
+| `0x42` | `W_SCREEN` | None | Width 100vw | `width: 100vw` |
+| `0x43` | `H_SCREEN` | None | Height 100vh | `height: 100vh` |
 | `0x46` | `W_PX` | `2B UInt16 BE` | Width pixels | `width: 800px` |
+| `0x47` | `H_PX` | `2B UInt16 BE` | Height pixels | `height: 100px` |
 | `0x50` | `BG_COLOR_NAMED` | `1B ColorIdx, 1B ShadeIdx` | Tailwind Palette | `background-color: #0f172a` (slate-900) |
 | `0x51` | `BG_COLOR_RGB` | `3B (R, G, B)` | Custom Hex | `background-color: rgb(15,23,42)` |
 | `0x52` | `TEXT_COLOR_NAMED`| `1B ColorIdx, 1B ShadeIdx` | Tailwind Palette | `color: #38bdf8` (sky-400) |
 | `0x70` | `FONT_SIZE_SCALE` | `1B ScaleCode` (1 to 8) | Font scale rem | `font-size: 1.25rem` (for `text-xl`) |
 | `0x80` | `TRANSFORM_SCALE` | `1B UInt8` | Scale percentage | `transform: scale(1.05)` |
+| `0x81` | `TRANSFORM_ROTATE`| `2B UInt16 BE` | Rotation degrees | `transform: rotate(45deg)` |
 | `0xFE` | `RAW_CSS_STRING` | `2B Length BE + UTF-8 Bytes` | Fallback Escape Hatch | Arbitrary `calc()`, invalid hex, plugins |
 | `0xFF` | `END` | None | Stream terminator | Ends parser loop |
 

@@ -33,9 +33,9 @@ Any arbitrary calculation (`w-[calc(100%-32px)]`), custom theme variable, or unr
 
 | Test Case | Original String Size | Binary Opcode Size | Wire Compression | Avg Compile Latency | Avg Decompile Latency |
 |---|---|---|---|---|---|
-| **Simple Component** (`flex items-center p-4 bg-slate-900 rounded-xl`) | 45 Bytes | 16 Bytes | **64.4% smaller** | 0.0039 ms (3.9 µs) | 0.0017 ms (1.7 µs) |
-| **Medium Responsive Card** (`flex flex-col md:flex-row items-center justify-between p-6 m-auto w-full bg-[#0f172a] rounded-2xl shadow-lg border-2 gap-4 font-bold text-center`) | 144 Bytes | 61 Bytes | **57.6% smaller** | 0.0090 ms (9.0 µs) | 0.0035 ms (3.5 µs) |
-| **Complex UI (Hover, Breakpoint, Animation, Calc)** (`flex flex-col items-center p-6 bg-[#0f172a] rounded-2xl md:flex-row md:justify-between lg:w-[800px] w-[calc(100%-32px)] hover:scale-105 hover:bg-[#1e293b] transition-all duration-300 ease-in-out animate-spin font-bold`) | 217 Bytes | 102 Bytes | **53.0% smaller** | 0.0137 ms (13.7 µs) | 0.0038 ms (3.8 µs) |
+| **Simple Component** (`flex items-center p-4 bg-slate-900 rounded-xl`) | 45 Bytes | 15 Bytes | **66.7% smaller** | 0.0044 ms (4.4 µs) | 0.0019 ms (1.9 µs) |
+| **Medium Responsive Card** (`flex flex-col md:flex-row items-center justify-between p-6 m-auto w-full bg-[#0f172a] rounded-2xl shadow-lg border-2 gap-4 font-bold text-center`) | 144 Bytes | 60 Bytes | **58.3% smaller** | 0.0107 ms (10.7 µs) | 0.0039 ms (3.9 µs) |
+| **Complex UI (Hover, Breakpoint, Animation, Calc)** (`flex flex-col items-center p-6 bg-[#0f172a] rounded-2xl md:flex-row md:justify-between lg:w-[800px] w-[calc(100%-32px)] hover:scale-105 hover:bg-[#1e293b] transition-all duration-300 ease-in-out animate-spin font-bold`) | 217 Bytes | 74 Bytes | **65.9% smaller** | 0.0148 ms (14.8 µs) | 0.0040 ms (4.0 µs) |
 
 ---
 

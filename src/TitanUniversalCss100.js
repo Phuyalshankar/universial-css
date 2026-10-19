@@ -1,16 +1,17 @@
 /**
- * 🐬 TITAN UNIVERSAL CSS ENGINE (v1.0.0 - Senior Refactored)
+ * 🐬 TITAN UNIVERSAL CSS ENGINE (v1.0.1)
  * ═══════════════════════════════════════════════════════════════════════════════
- * Version 1.0.0 Protocol
- * Features:
- *   - 0x01 Header Version Byte
- *   - Proper Spacing in rem (Tailwind 1 unit = 0.25rem) with fractional scale support
- *   - Comprehensive State Handling (hover, focus, active, disabled, dark)
- *   - Responsive + State Combinations (e.g. md:hover:bg-red-500)
- *   - Full Tailwind Named Colors Palette (21 Colors x 10 Shades)
- *   - Font Size rem Scale (xs to 4xl)
- *   - Validated Hex Parser with 0xFE fallback
- *   - Clean multi-byte buffer reading
+ * Version 1.0.1 Protocol
+ * Key Bug Fixes in v1.0.1:
+ *   - remFromUnits helper with zero & fractional stability
+ *   - Removed trailing 0x00 byte
+ *   - Reinstated h-[px] and OP.H_PX
+ *   - Implemented dead opcodes (flex-wrap, alignment, directions, w-screen, h-screen, rotate)
+ *   - Typography evaluation order (alignment before scale)
+ *   - Opacity modifier (/50) safe fallback
+ *   - 2xl: prefix evaluation order
+ *   - Removed unused fs dependency
+ *   - Strict Version Guard throwing Error on unsupported version
  */
 
 const VERSION = 0x01;
@@ -49,7 +50,6 @@ const COLOR_NAMES = [
 
 const COLOR_SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900];
 
-// Standard Tailwind CSS Hex lookup map for 19 core colors x 10 shades
 const COLOR_PALETTE = {
     slate: { 50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1', 400: '#94a3b8', 500: '#64748b', 600: '#475569', 700: '#334155', 800: '#1e293b', 900: '#0f172a' },
     gray: { 50: '#f9fafb', 100: '#f3f4f6', 200: '#e5e7eb', 300: '#d1d5db', 400: '#9ca3af', 500: '#6b7280', 600: '#4b5563', 700: '#374151', 800: '#1f2937', 900: '#111827' },
@@ -95,7 +95,13 @@ const FONT_SIZE_REMS = {
     0x08: '2.25rem'
 };
 
-// ─── 4. OPCODES ─────────────────────────────────────────────────────────────
+// ─── 4. HELPER: REM FROM UNITS (Fix 1) ──────────────────────────────────────
+function remFromUnits(u) {
+    if (u === 0) return '0rem';
+    return String(parseFloat((u * 0.0625).toFixed(4))) + 'rem';
+}
+
+// ─── 5. OPCODES ─────────────────────────────────────────────────────────────
 const OP = {
     DISPLAY_NONE: 0x01, DISPLAY_FLEX: 0x02, DISPLAY_GRID: 0x03, DISPLAY_BLOCK: 0x04,
     FLEX_DIR_ROW: 0x06, FLEX_DIR_COL: 0x08, FLEX_WRAP: 0x0A,
@@ -112,7 +118,7 @@ const OP = {
     BG_COLOR_NAMED: 0x50, BG_COLOR_RGB: 0x51,
     TEXT_COLOR_NAMED: 0x52, TEXT_COLOR_RGB: 0x53,
     BORDER_COLOR_NAMED: 0x54, BORDER_COLOR_RGB: 0x55,
-    SPECIAL_COLOR: 0x56, // white, black, transparent
+    SPECIAL_COLOR: 0x56,
 
     BORDER_WIDTH: 0x60, ROUNDED_SM: 0x64, ROUNDED_MD: 0x65, ROUNDED_LG: 0x66,
     ROUNDED_XL: 0x67, ROUNDED_2XL: 0x68, ROUNDED_FULL: 0x6A, ROUNDED_PX: 0x6B,
@@ -127,14 +133,14 @@ const OP = {
     BLUR: 0xA0, SHADOW_MD: 0xA6, SHADOW_LG: 0xA7, OPACITY: 0xAA,
     CURSOR_POINTER: 0xC0,
 
-    RAW_CSS_STRING: 0xFE, // 🌟 Escape Hatch for calc(), plugins, unsupported utilities
+    RAW_CSS_STRING: 0xFE,
     END: 0xFF
 };
 
-// ─── 5. UNIVERSAL ENCODER ───────────────────────────────────────────────────
+// ─── 6. UNIVERSAL ENCODER ───────────────────────────────────────────────────
 class TitanUniversalCss100Encoder {
     constructor() {
-        this.bytes = [VERSION]; // Buffer starts with Version 0x01
+        this.bytes = [VERSION];
     }
 
     pushOp(op) { this.bytes.push(op & 0xFF); }
@@ -149,18 +155,16 @@ class TitanUniversalCss100Encoder {
         for (let b of buf) this.bytes.push(b);
     }
 
-    // Strict validation for Hex strings
     parseHexValid(hex) {
         hex = hex.replace('#', '');
         if (!/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(hex)) {
-            return null; // Invalid hex
+            return null;
         }
         if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
         const num = parseInt(hex, 16);
         return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
     }
 
-    // Encodes fractional spacing scale: p-0.5 -> 2, p-1 -> 4, p-4 -> 16, gap-1.5 -> 6
     encodeSpacingUnit(valStr) {
         const parsed = parseFloat(valStr);
         if (isNaN(parsed)) return 0;
@@ -171,15 +175,15 @@ class TitanUniversalCss100Encoder {
         let modifier = MASK.STATE_NONE | MASK.BREAK_DEFAULT;
         let token = fullToken;
 
-        // Parse Multiple prefixes (e.g. md:hover:bg-red-500)
+        // Fix 7: Longest prefixes first (2xl: before xl:)
         let changed = true;
         while (changed) {
             changed = false;
-            if (token.startsWith('sm:')) { modifier |= MASK.BREAK_SM; token = token.slice(3); changed = true; }
-            else if (token.startsWith('md:')) { modifier |= MASK.BREAK_MD; token = token.slice(3); changed = true; }
-            else if (token.startsWith('lg:')) { modifier |= MASK.BREAK_LG; token = token.slice(3); changed = true; }
+            if (token.startsWith('2xl:')) { modifier |= MASK.BREAK_2XL; token = token.slice(4); changed = true; }
             else if (token.startsWith('xl:')) { modifier |= MASK.BREAK_XL; token = token.slice(3); changed = true; }
-            else if (token.startsWith('2xl:')) { modifier |= MASK.BREAK_2XL; token = token.slice(4); changed = true; }
+            else if (token.startsWith('lg:')) { modifier |= MASK.BREAK_LG; token = token.slice(3); changed = true; }
+            else if (token.startsWith('md:')) { modifier |= MASK.BREAK_MD; token = token.slice(3); changed = true; }
+            else if (token.startsWith('sm:')) { modifier |= MASK.BREAK_SM; token = token.slice(3); changed = true; }
 
             if (token.startsWith('hover:')) { modifier |= MASK.STATE_HOVER; token = token.slice(6); changed = true; }
             else if (token.startsWith('focus:')) { modifier |= MASK.STATE_FOCUS; token = token.slice(6); changed = true; }
@@ -188,33 +192,52 @@ class TitanUniversalCss100Encoder {
             else if (token.startsWith('dark:')) { modifier |= MASK.STATE_DARK; token = token.slice(5); changed = true; }
         }
 
-        // 1. Write the 1-byte Modifier Prefix
         this.pushU8(modifier);
 
-        // 2. Layout
+        // Layout & Flex
         if (token === 'flex') return this.pushOp(OP.DISPLAY_FLEX);
         if (token === 'grid') return this.pushOp(OP.DISPLAY_GRID);
         if (token === 'hidden') return this.pushOp(OP.DISPLAY_NONE);
         if (token === 'flex-row') return this.pushOp(OP.FLEX_DIR_ROW);
         if (token === 'flex-col') return this.pushOp(OP.FLEX_DIR_COL);
+        if (token === 'flex-wrap') return this.pushOp(OP.FLEX_WRAP); // Fix 4
         if (token === 'items-center') return this.pushOp(OP.ALIGN_CENTER);
+        if (token === 'items-start') return this.pushOp(OP.ALIGN_START); // Fix 4
+        if (token === 'items-end') return this.pushOp(OP.ALIGN_END);     // Fix 4
+        if (token === 'items-stretch') return this.pushOp(OP.ALIGN_STRETCH); // Fix 4
         if (token === 'justify-center') return this.pushOp(OP.JUSTIFY_CENTER);
         if (token === 'justify-between') return this.pushOp(OP.JUSTIFY_BETWEEN);
+        if (token === 'justify-start') return this.pushOp(OP.JUSTIFY_START); // Fix 4
+        if (token === 'justify-end') return this.pushOp(OP.JUSTIFY_END);     // Fix 4
 
-        // Spacing with fractional support (p-0.5, gap-1.5, etc.)
+        // Spacing with fractional & directional support (Fix 4)
         if (token.startsWith('gap-')) {
             this.pushOp(OP.GAP);
             return this.pushU8(this.encodeSpacingUnit(token.slice(4)));
         }
         if (token === 'm-auto') return this.pushOp(OP.M_AUTO);
         if (token.startsWith('m-')) { this.pushOp(OP.M_ALL); return this.pushU8(this.encodeSpacingUnit(token.slice(2))); }
+        if (token.startsWith('mt-')) { this.pushOp(OP.MT); return this.pushU8(this.encodeSpacingUnit(token.slice(3))); }
+        if (token.startsWith('mb-')) { this.pushOp(OP.MB); return this.pushU8(this.encodeSpacingUnit(token.slice(3))); }
+        if (token.startsWith('ml-')) { this.pushOp(OP.ML); return this.pushU8(this.encodeSpacingUnit(token.slice(3))); }
+        if (token.startsWith('mr-')) { this.pushOp(OP.MR); return this.pushU8(this.encodeSpacingUnit(token.slice(3))); }
+        if (token.startsWith('mx-')) { this.pushOp(OP.MX); return this.pushU8(this.encodeSpacingUnit(token.slice(3))); }
+        if (token.startsWith('my-')) { this.pushOp(OP.MY); return this.pushU8(this.encodeSpacingUnit(token.slice(3))); }
+
         if (token.startsWith('p-')) { this.pushOp(OP.P_ALL); return this.pushU8(this.encodeSpacingUnit(token.slice(2))); }
+        if (token.startsWith('pt-')) { this.pushOp(OP.PT); return this.pushU8(this.encodeSpacingUnit(token.slice(3))); }
+        if (token.startsWith('pb-')) { this.pushOp(OP.PB); return this.pushU8(this.encodeSpacingUnit(token.slice(3))); }
+        if (token.startsWith('pl-')) { this.pushOp(OP.PL); return this.pushU8(this.encodeSpacingUnit(token.slice(3))); }
+        if (token.startsWith('pr-')) { this.pushOp(OP.PR); return this.pushU8(this.encodeSpacingUnit(token.slice(3))); }
         if (token.startsWith('px-')) { this.pushOp(OP.PX); return this.pushU8(this.encodeSpacingUnit(token.slice(3))); }
         if (token.startsWith('py-')) { this.pushOp(OP.PY); return this.pushU8(this.encodeSpacingUnit(token.slice(3))); }
 
         // Sizing
         if (token === 'w-full') return this.pushOp(OP.W_FULL);
         if (token === 'h-full') return this.pushOp(OP.H_FULL);
+        if (token === 'w-screen') return this.pushOp(OP.W_SCREEN); // Fix 4
+        if (token === 'h-screen') return this.pushOp(OP.H_SCREEN); // Fix 4
+
         if (token.startsWith('w-[') && token.endsWith(']')) {
             const val = token.slice(3, -1);
             if (val.includes('calc') || val.includes('%')) {
@@ -222,20 +245,36 @@ class TitanUniversalCss100Encoder {
                 return this.pushString(`width: ${val}`);
             }
             this.pushOp(OP.W_PX);
-            return this.pushU16(parseInt(val) || 0);
+            return this.pushU16(parseInt(val, 10) || 0);
         }
 
-        // Special Colors (white, black, transparent)
+        // Fix 3: Reinstated h-[px]
+        if (token.startsWith('h-[') && token.endsWith(']')) {
+            const val = token.slice(3, -1);
+            if (val.includes('calc') || val.includes('%')) {
+                this.pushOp(OP.RAW_CSS_STRING);
+                return this.pushString(`height: ${val}`);
+            }
+            this.pushOp(OP.H_PX);
+            return this.pushU16(parseInt(val, 10) || 0);
+        }
+
+        // Special Colors
         if (token === 'bg-white') { this.pushOp(OP.SPECIAL_COLOR); this.pushU8(1); return this.pushU8(0); }
         if (token === 'text-white') { this.pushOp(OP.SPECIAL_COLOR); this.pushU8(2); return this.pushU8(0); }
         if (token === 'bg-black') { this.pushOp(OP.SPECIAL_COLOR); this.pushU8(1); return this.pushU8(1); }
         if (token === 'text-black') { this.pushOp(OP.SPECIAL_COLOR); this.pushU8(2); return this.pushU8(1); }
 
-        // Named Colors (bg-slate-900, text-sky-400, etc.)
+        // Named Colors with Fix 6: /opacity fallback
         for (let cIdx = 0; cIdx < COLOR_NAMES.length; cIdx++) {
             const cName = COLOR_NAMES[cIdx];
             if (token.startsWith(`bg-${cName}-`)) {
-                const sVal = parseInt(token.replace(`bg-${cName}-`, ''));
+                const shadePart = token.replace(`bg-${cName}-`, '');
+                if (shadePart.includes('/')) {
+                    this.pushOp(OP.RAW_CSS_STRING);
+                    return this.pushString(fullToken);
+                }
+                const sVal = parseInt(shadePart, 10);
                 const sIdx = COLOR_SHADES.indexOf(sVal);
                 if (sIdx !== -1) {
                     this.pushOp(OP.BG_COLOR_NAMED);
@@ -244,7 +283,12 @@ class TitanUniversalCss100Encoder {
                 }
             }
             if (token.startsWith(`text-${cName}-`)) {
-                const sVal = parseInt(token.replace(`text-${cName}-`, ''));
+                const shadePart = token.replace(`text-${cName}-`, '');
+                if (shadePart.includes('/')) {
+                    this.pushOp(OP.RAW_CSS_STRING);
+                    return this.pushString(fullToken);
+                }
+                const sVal = parseInt(shadePart, 10);
                 const sIdx = COLOR_SHADES.indexOf(sVal);
                 if (sIdx !== -1) {
                     this.pushOp(OP.TEXT_COLOR_NAMED);
@@ -261,7 +305,6 @@ class TitanUniversalCss100Encoder {
                 this.pushOp(OP.BG_COLOR_RGB);
                 return this.bytes.push(rgb[0], rgb[1], rgb[2]);
             }
-            // Fallback to RAW_CSS_STRING if hex is invalid!
             this.pushOp(OP.RAW_CSS_STRING);
             return this.pushString(fullToken);
         }
@@ -274,6 +317,13 @@ class TitanUniversalCss100Encoder {
             this.pushOp(OP.RAW_CSS_STRING);
             return this.pushString(fullToken);
         }
+
+        // Fix 5: Typography alignment & weights BEFORE font-size scale
+        if (token === 'text-center') return this.pushOp(OP.TEXT_ALIGN_CENTER);
+        if (token === 'text-left') return this.pushOp(OP.TEXT_ALIGN_LEFT);
+        if (token === 'text-right') return this.pushOp(OP.TEXT_ALIGN_RIGHT);
+        if (token === 'font-bold') { this.pushOp(OP.FONT_WEIGHT); return this.pushU16(700); }
+        if (token === 'font-mono') return this.pushOp(OP.FONT_MONO); // Fix 4
 
         // Font Sizes (text-xs to text-4xl)
         if (token.startsWith('text-')) {
@@ -292,52 +342,56 @@ class TitanUniversalCss100Encoder {
         // Transforms & Transitions
         if (token.startsWith('scale-')) {
             this.pushOp(OP.TRANSFORM_SCALE);
-            return this.pushU8(parseInt(token.slice(6)) || 100);
+            return this.pushU8(parseInt(token.slice(6), 10) || 100);
+        }
+        if (token.startsWith('rotate-')) {
+            this.pushOp(OP.TRANSFORM_ROTATE);
+            return this.pushU16(parseInt(token.slice(7), 10) || 0);
         }
         if (token === 'transition-all') return this.pushOp(OP.TRANSITION_ALL);
+        if (token === 'ease-in-out') return this.pushOp(OP.TRANSITION_EASE_IN_OUT); // Fix 4
+        if (token === 'animate-spin') return this.pushOp(OP.ANIMATION_SPIN); // Fix 4
+        if (token === 'animate-pulse') return this.pushOp(OP.ANIMATION_PULSE); // Fix 4
         if (token.startsWith('duration-')) {
             this.pushOp(OP.TRANSITION_DURATION);
-            return this.pushU16(parseInt(token.slice(9)) || 300);
+            return this.pushU16(parseInt(token.slice(9), 10) || 300);
         }
 
-        // Typography
-        if (token === 'font-bold') { this.pushOp(OP.FONT_WEIGHT); return this.pushU16(700); }
-        if (token === 'text-center') return this.pushOp(OP.TEXT_ALIGN_CENTER);
-
-        // 🌟 100% Fallback: Escape Hatch
+        // Fallback
         this.pushOp(OP.RAW_CSS_STRING);
         this.pushString(fullToken);
     }
 
     encodeClasses(classesStr) {
-        if (!classesStr) return;
-        // Split with multiple whitespaces, tabs, newlines
+        if (!classesStr || !classesStr.trim()) {
+            this.pushOp(OP.END);
+            return;
+        }
         const rawTokens = classesStr.trim().split(/\s+/).filter(Boolean);
-        // Deduplicate tokens
         const tokens = Array.from(new Set(rawTokens));
 
         for (const t of tokens) {
             this.encodeClassToken(t);
         }
-        // End marker (Clean, no extra trailing 0x00 byte)
-        this.pushU8(0x00);
+        // Fix 2: Clean end, no trailing 0x00
         this.pushOp(OP.END);
     }
 
     toBuffer() { return Buffer.from(this.bytes); }
 }
 
-// ─── 6. UNIVERSAL DECODER ───────────────────────────────────────────────────
+// ─── 7. UNIVERSAL DECODER ───────────────────────────────────────────────────
 class TitanUniversalCss100Decoder {
     static decodeToCSS(buffer, selector = '.titan-node') {
         if (!buffer || buffer.length < 2) return '';
         let pos = 0;
         const version = buffer[pos++];
+
+        // Fix 9: Strict version guard
         if (version !== VERSION) {
-            // Future compatibility guard
+            throw new Error(`Unsupported protocol version: 0x${version ? version.toString(16) : '00'}`);
         }
 
-        // Structured bucket for combinations: breakPx -> { base: [], hover: [], focus: [], active: [], dark: [] }
         const buckets = {
             'base': { base: [], hover: [], focus: [], active: [], disabled: [], dark: [] }
         };
@@ -364,51 +418,69 @@ class TitanUniversalCss100Decoder {
                 case OP.DISPLAY_NONE: rule = 'display: none'; break;
                 case OP.FLEX_DIR_ROW: rule = 'flex-direction: row'; break;
                 case OP.FLEX_DIR_COL: rule = 'flex-direction: column'; break;
+                case OP.FLEX_WRAP: rule = 'flex-wrap: wrap'; break;
+                case OP.ALIGN_START: rule = 'align-items: flex-start'; break;
                 case OP.ALIGN_CENTER: rule = 'align-items: center'; break;
+                case OP.ALIGN_END: rule = 'align-items: flex-end'; break;
+                case OP.ALIGN_STRETCH: rule = 'align-items: stretch'; break;
+                case OP.JUSTIFY_START: rule = 'justify-content: flex-start'; break;
                 case OP.JUSTIFY_CENTER: rule = 'justify-content: center'; break;
+                case OP.JUSTIFY_END: rule = 'justify-content: flex-end'; break;
                 case OP.JUSTIFY_BETWEEN: rule = 'justify-content: space-between'; break;
 
-                // Spacing in rem (Tailwind 1 unit = 0.25rem; our unit = 1/4 of that = 0.0625rem)
-                case OP.GAP: {
-                    const u = buffer[pos++];
-                    rule = `gap: ${(u * 0.0625).toFixed(4).replace(/\.?0+$/, '')}rem`;
-                    break;
-                }
+                // Fix 1: remFromUnits
+                case OP.GAP: rule = `gap: ${remFromUnits(buffer[pos++])}`; break;
                 case OP.M_AUTO: rule = 'margin: auto'; break;
-                case OP.M_ALL: {
-                    const u = buffer[pos++];
-                    rule = `margin: ${(u * 0.0625).toFixed(4).replace(/\.?0+$/, '')}rem`;
+                case OP.M_ALL: rule = `margin: ${remFromUnits(buffer[pos++])}`; break;
+                case OP.MT: rule = `margin-top: ${remFromUnits(buffer[pos++])}`; break;
+                case OP.MB: rule = `margin-bottom: ${remFromUnits(buffer[pos++])}`; break;
+                case OP.ML: rule = `margin-left: ${remFromUnits(buffer[pos++])}`; break;
+                case OP.MR: rule = `margin-right: ${remFromUnits(buffer[pos++])}`; break;
+                case OP.MX: {
+                    const r = remFromUnits(buffer[pos++]);
+                    rule = `margin-left: ${r}; margin-right: ${r}`;
                     break;
                 }
-                case OP.P_ALL: {
-                    const u = buffer[pos++];
-                    rule = `padding: ${(u * 0.0625).toFixed(4).replace(/\.?0+$/, '')}rem`;
+                case OP.MY: {
+                    const r = remFromUnits(buffer[pos++]);
+                    rule = `margin-top: ${r}; margin-bottom: ${r}`;
                     break;
                 }
+                case OP.P_ALL: rule = `padding: ${remFromUnits(buffer[pos++])}`; break;
+                case OP.PT: rule = `padding-top: ${remFromUnits(buffer[pos++])}`; break;
+                case OP.PB: rule = `padding-bottom: ${remFromUnits(buffer[pos++])}`; break;
+                case OP.PL: rule = `padding-left: ${remFromUnits(buffer[pos++])}`; break;
+                case OP.PR: rule = `padding-right: ${remFromUnits(buffer[pos++])}`; break;
                 case OP.PX: {
-                    const u = buffer[pos++];
-                    const rem = `${(u * 0.0625).toFixed(4).replace(/\.?0+$/, '')}rem`;
-                    rule = `padding-left: ${rem}; padding-right: ${rem}`;
+                    const r = remFromUnits(buffer[pos++]);
+                    rule = `padding-left: ${r}; padding-right: ${r}`;
                     break;
                 }
                 case OP.PY: {
-                    const u = buffer[pos++];
-                    const rem = `${(u * 0.0625).toFixed(4).replace(/\.?0+$/, '')}rem`;
-                    rule = `padding-top: ${rem}; padding-bottom: ${rem}`;
+                    const r = remFromUnits(buffer[pos++]);
+                    rule = `padding-top: ${r}; padding-bottom: ${r}`;
                     break;
                 }
 
-                // Sizing with safe multi-byte reading
+                // Sizing & Fix 3: H_PX
                 case OP.W_FULL: rule = 'width: 100%'; break;
                 case OP.H_FULL: rule = 'height: 100%'; break;
+                case OP.W_SCREEN: rule = 'width: 100vw'; break;
+                case OP.H_SCREEN: rule = 'height: 100vh'; break;
                 case OP.W_PX: {
                     const hi = buffer[pos++];
                     const lo = buffer[pos++];
                     rule = `width: ${(hi << 8) | lo}px`;
                     break;
                 }
+                case OP.H_PX: {
+                    const hi = buffer[pos++];
+                    const lo = buffer[pos++];
+                    rule = `height: ${(hi << 8) | lo}px`;
+                    break;
+                }
 
-                // Named Colors
+                // Colors
                 case OP.BG_COLOR_NAMED: {
                     const cIdx = buffer[pos++];
                     const sIdx = buffer[pos++];
@@ -428,8 +500,8 @@ class TitanUniversalCss100Decoder {
                     break;
                 }
                 case OP.SPECIAL_COLOR: {
-                    const target = buffer[pos++]; // 1=bg, 2=text
-                    const cType = buffer[pos++];  // 0=white, 1=black
+                    const target = buffer[pos++];
+                    const cType = buffer[pos++];
                     const val = cType === 0 ? '#ffffff' : '#000000';
                     rule = target === 1 ? `background-color: ${val}` : `color: ${val}`;
                     break;
@@ -445,36 +517,48 @@ class TitanUniversalCss100Decoder {
                     break;
                 }
 
-                // Font Size Scale in rem
+                // Typography & Alignment
                 case OP.FONT_SIZE_SCALE: {
                     const fCode = buffer[pos++];
                     rule = `font-size: ${FONT_SIZE_REMS[fCode] || '1rem'}`;
                     break;
                 }
-
-                // Borders & Radius
-                case OP.ROUNDED_XL: rule = 'border-radius: 0.75rem'; break;
-                case OP.ROUNDED_2XL: rule = 'border-radius: 1rem'; break;
-                case OP.ROUNDED_FULL: rule = 'border-radius: 9999px'; break;
-
-                // Transforms & Transitions
-                case OP.TRANSFORM_SCALE: rule = `transform: scale(${buffer[pos++] / 100})`; break;
-                case OP.TRANSITION_ALL: rule = 'transition: all'; break;
-                case OP.TRANSITION_DURATION: {
-                    const hi = buffer[pos++];
-                    const lo = buffer[pos++];
-                    rule = `transition-duration: ${(hi << 8) | lo}ms`;
-                    break;
-                }
+                case OP.TEXT_ALIGN_CENTER: rule = 'text-align: center'; break;
+                case OP.TEXT_ALIGN_LEFT: rule = 'text-align: left'; break;
+                case OP.TEXT_ALIGN_RIGHT: rule = 'text-align: right'; break;
                 case OP.FONT_WEIGHT: {
                     const hi = buffer[pos++];
                     const lo = buffer[pos++];
                     rule = `font-weight: ${(hi << 8) | lo}`;
                     break;
                 }
-                case OP.TEXT_ALIGN_CENTER: rule = 'text-align: center'; break;
+                case OP.FONT_MONO: rule = 'font-family: monospace'; break;
 
-                // Escape Hatch Raw CSS
+                // Borders
+                case OP.ROUNDED_XL: rule = 'border-radius: 0.75rem'; break;
+                case OP.ROUNDED_2XL: rule = 'border-radius: 1rem'; break;
+                case OP.ROUNDED_FULL: rule = 'border-radius: 9999px'; break;
+
+                // Transforms & Transitions
+                case OP.TRANSFORM_SCALE: rule = `transform: scale(${buffer[pos++] / 100})`; break;
+                case OP.TRANSFORM_ROTATE: {
+                    const hi = buffer[pos++];
+                    const lo = buffer[pos++];
+                    rule = `transform: rotate(${(hi << 8) | lo}deg)`;
+                    break;
+                }
+                case OP.TRANSITION_ALL: rule = 'transition: all'; break;
+                case OP.TRANSITION_EASE_IN_OUT: rule = 'transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1)'; break;
+                case OP.ANIMATION_SPIN: rule = 'animation: spin 1s linear infinite'; break;
+                case OP.ANIMATION_PULSE: rule = 'animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'; break;
+                case OP.TRANSITION_DURATION: {
+                    const hi = buffer[pos++];
+                    const lo = buffer[pos++];
+                    rule = `transition-duration: ${(hi << 8) | lo}ms`;
+                    break;
+                }
+
+                // Raw Fallback
                 case OP.RAW_CSS_STRING: {
                     const hi = buffer[pos++];
                     const lo = buffer[pos++];
@@ -487,7 +571,6 @@ class TitanUniversalCss100Decoder {
 
             if (!rule) continue;
 
-            // Route rule to appropriate state within targetScope bucket
             const b = buckets[targetScope];
             if (modifier & MASK.STATE_HOVER) b.hover.push(rule);
             else if (modifier & MASK.STATE_FOCUS) b.focus.push(rule);
@@ -497,10 +580,7 @@ class TitanUniversalCss100Decoder {
             else b.base.push(rule);
         }
 
-        // Generate Structured CSS Output
         let css = '';
-
-        // 1. Base Styles
         const base = buckets['base'];
         if (base.base.length > 0) css += `${selector} { ${base.base.join('; ')}; }\n`;
         if (base.hover.length > 0) css += `${selector}:hover { ${base.hover.join('; ')}; }\n`;
@@ -511,7 +591,6 @@ class TitanUniversalCss100Decoder {
             css += `@media (prefers-color-scheme: dark) { ${selector} { ${base.dark.join('; ')}; } }\n`;
         }
 
-        // 2. Responsive Breakpoints with Combinations
         for (const [bp, bList] of Object.entries(buckets)) {
             if (bp === 'base') continue;
             let innerMediaCSS = '';
@@ -540,6 +619,7 @@ module.exports = {
     COLOR_PALETTE,
     FONT_SIZE_MAP,
     FONT_SIZE_REMS,
+    remFromUnits,
     TitanUniversalCss100Encoder,
     TitanUniversalCss100Decoder
 };
