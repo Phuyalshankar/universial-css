@@ -1,36 +1,46 @@
-# ⚡ Universial CSS (`universial-css`)
+# ⚡ Universal CSS (`universal-css`)
 
-> **100% of Tailwind & Modern CSS Compiled into a 15 KB Universal Binary Opcode Engine.**  
-> *Ultra-fast, zero-overhead, zero-config styling for Web, Android, iOS, React Native, and Flutter.*
+> **Mathematical Binary Opcode Engine for Tailwind & Modern CSS.**  
+> *Ultra-fast, zero-overhead binary styling with standard W3C CSS output.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![GitHub](https://img.shields.io/badge/GitHub-Phuyalshankar%2Funiversial--css-black?logo=github)](https://github.com/Phuyalshankar/universial-css)
-[![Zero Config](https://img.shields.io/badge/Config-Zero-success.svg)]()
+[![GitHub](https://img.shields.io/badge/GitHub-Phuyalshankar%2Funiversal--css-black?logo=github)](https://github.com/Phuyalshankar/universial-css)
+[![Specification](https://img.shields.io/badge/Spec-SPEC.md-informational.svg)](./SPEC.md)
 [![Size](https://img.shields.io/badge/Engine_Size-15_KB-brightgreen.svg)]()
 
 ---
 
-## 🌟 The Breakthrough
+## 🌟 Architecture & The Escape Hatch
 
-Today, running Tailwind CSS requires **PostCSS, Node.js build pipelines, `tailwind.config.js`, and massive `node_modules` (40–80 MB)**. Moreover, mobile developers on Android, iOS, and Flutter cannot natively parse CSS strings without massive runtime performance hits.
+Universal CSS does not bundle megabytes of static CSS tables. Instead, it uses **Deterministic Design Token Math + Escape Hatch Architecture**:
 
-**`universial-css` solves this forever:**
-1. **Mathematical Binary Opcodes:** Every Tailwind property is compiled into a 1–2 byte binary opcode.
-2. **85% Smaller Over the Wire:** An entire complex UI style string compresses from 250 bytes to just **22–70 bytes**.
-3. **True Cross-Platform:** The exact same binary byte stream renders pixel-perfect on **Web (W3C CSS), Android (Skia Canvas), iOS (Metal), and Microcontrollers (ESP32)**.
-4. **100% Modern CSS Support:** Responsive breakpoints (`sm:`, `md:`, `lg:`), Pseudo-states (`hover:`, `focus:`), Transitions, Animations, and arbitrary `calc()` escape hatches are 100% supported.
+1. **First-Class Core Utilities:** Common layout (`flex`, `grid`), spacing (`m-*`, `p-*`), dimensions (`w-*`, `h-*`), and colors are mapped directly to 1–2 byte opcodes.
+2. **Modifier Bitmask:** Responsive breakpoints (`sm:`, `md:`, `lg:`) and pseudo-states (`hover:`, `focus:`) are stored in a single 1-byte bitmask.
+3. **The `0xFE` Escape Hatch (100% Coverage):** Any arbitrary calculation (e.g. `w-[calc(100%-32px)]`), custom plugins, or unmapped classes are automatically routed through opcode `0xFE (RAW_CSS_STRING)`. This ensures **zero silent failures** and preservation of arbitrary CSS.
+4. **Theme Customization:** Universal CSS uses the **Tailwind Default Scale** (`1 unit = 4px`). Custom design tokens from `tailwind.config.js` or non-standard scales are seamlessly routed through the `0xFE` fallback.
+
+See [SPEC.md](./SPEC.md) for the complete binary specification.
 
 ---
 
-## 📦 Benchmark Comparison
+## 📊 Measured Benchmark Data
 
-| Metric | Traditional Tailwind CSS | `universial-css` 🐬⚡ |
-|---|---|---|
-| **Engine Footprint** | 40 MB – 80 MB (Node dependencies) | **Exact 15 KB** |
-| **Wire Data Transfer** | 50 KB – 1 MB CSS Strings | **74 Bytes (0.07 KB) Binary** |
-| **Parsing Latency** | 20 ms – 150 ms (String regex) | **0.001 ms (Single CPU cycle lookup)** |
-| **Cross-Platform** | Web only (React Native needs NativeWind) | **Web, Android, iOS, Flutter, MCU** |
-| **Config Required** | `tailwind.config.js` + `postcss` | **ZERO Config (Drop-in & Run)** |
+*Measured using `process.hrtime.bigint()` over 10,000 median iterations (Reproducible via `node benchmark.js`).*
+
+| Test Case | Original String Size | Binary Opcode Size | Wire Compression | Avg Compile Latency | Avg Decompile Latency |
+|---|---|---|---|---|---|
+| **Simple Component** (`flex items-center p-4 bg-slate-900 rounded-xl`) | 45 Bytes | 27 Bytes | **40.0% smaller** | 0.0033 ms (3.2 µs) | 0.0010 ms (1.0 µs) |
+| **Medium Card** (`flex flex-col md:flex-row items-center justify-between p-6 m-auto w-full bg-[#0f172a] rounded-2xl shadow-lg border-2 gap-4 font-bold text-center`) | 144 Bytes | 60 Bytes | **58.3% smaller** | 0.0038 ms (3.8 µs) | 0.0020 ms (2.0 µs) |
+| **Complex UI (Hover, Breakpoint, Animation, Calc)** (`flex flex-col items-center p-6 bg-[#0f172a] rounded-2xl md:flex-row md:justify-between lg:w-[800px] w-[calc(100%-32px)] hover:scale-105 hover:bg-[#1e293b] transition-all duration-300 ease-in-out animate-spin font-bold`) | 217 Bytes | 74 Bytes | **65.9% smaller** | 0.0049 ms (4.9 µs) | 0.0025 ms (2.5 µs) |
+
+---
+
+## 🛠️ Platform Support Status
+
+- **Web (Browsers, Node.js, Next.js, Vite):** **Verified & Production-Ready** (Direct W3C Standard CSS & `@media` query generation).
+- **Android (Skia / Hardware Views):** **Verified** (Working reference implementation in [`examples/android-skia/`](./examples/android-skia/)).
+- **C/C++ Systems (Embedded, iOS Metal, Flutter FFI):** **Verified Header & GCC Tested** (Reference specification in [`tests/c-header/`](./tests/c-header/)).
+- **Standalone iOS / Flutter Packages:** In development (Roadmap).
 
 ---
 
@@ -39,33 +49,25 @@ Today, running Tailwind CSS requires **PostCSS, Node.js build pipelines, `tailwi
 ### 1. Web & React / Next.js
 Install via NPM:
 ```bash
-npm install universial-css
+npm install universal-css
 ```
 
 Simply import it once at the root of your project:
 ```javascript
-import 'universial-css';
+import 'universal-css';
 
 export default function App() {
   return (
     <div className="flex flex-col md:flex-row items-center p-6 bg-slate-900 rounded-2xl hover:scale-105 transition-all">
-      <h1 className="text-xl font-bold text-sky-400">Zero-Config Universal CSS</h1>
+      <h1 className="text-xl font-bold text-sky-400">Universal CSS</h1>
     </div>
   );
 }
 ```
 
-### 2. Standalone HTML (Zero Installation)
-```html
-<script src="https://cdn.jsdelivr.net/npm/universial-css/dist/universial-css.min.js"></script>
-<body class="flex items-center justify-center p-6 bg-slate-950 text-white">
-  <button class="px-6 py-3 bg-blue-600 rounded-xl hover:scale-105">Instant Binary Styling</button>
-</body>
-```
-
-### 3. Programmatic Node.js API
+### 2. Programmatic Node.js API
 ```javascript
-const { compile, decompile } = require('universial-css');
+const { compile, decompile } = require('universal-css');
 
 // 1. Compile Tailwind string to Binary Opcode Buffer
 const bin = compile('flex items-center p-4 bg-slate-900 rounded-xl hover:scale-105');
@@ -76,13 +78,13 @@ const css = decompile(bin, '.card');
 console.log(css);
 ```
 
-### 4. Command Line Interface (CLI)
+### 3. Command Line Interface (CLI)
 ```bash
 # Compile Tailwind classes into Hex binary opcodes
-npx universial-css compile "p-4 bg-slate-900 rounded-xl hover:scale-105"
+npx universal-css compile "p-4 bg-slate-900 rounded-xl hover:scale-105"
 
 # Decompile Hex opcodes back to pure CSS
-npx universial-css decompile "0002001500280400500f172a0067018069"
+npx universal-css decompile "0002001500280400500f172a0067018069"
 ```
 
 ---
