@@ -101,6 +101,33 @@ function remFromUnits(u) {
     return String(parseFloat((u * 0.0625).toFixed(4))) + 'rem';
 }
 
+function stringToUtf8Bytes(str) {
+    if (typeof Buffer !== 'undefined') return Buffer.from(str || '', 'utf8');
+    if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(str || '');
+    const bytes = [];
+    const s = str || '';
+    for (let i = 0; i < s.length; i++) {
+        const code = s.charCodeAt(i);
+        if (code < 0x80) bytes.push(code);
+        else if (code < 0x800) bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
+        else bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+    }
+    return bytes;
+}
+
+function decodeUtf8Bytes(buf, start, end) {
+    if (typeof Buffer !== 'undefined' && Buffer.isBuffer(buf)) {
+        return buf.toString('utf8', start, end);
+    }
+    if (typeof TextDecoder !== 'undefined') {
+        const sub = buf.subarray ? buf.subarray(start, end) : buf.slice(start, end);
+        return new TextDecoder('utf-8').decode(sub);
+    }
+    let str = '';
+    for (let i = start; i < end; i++) str += String.fromCharCode(buf[i]);
+    return str;
+}
+
 // ─── 5. OPCODES ─────────────────────────────────────────────────────────────
 const OP = {
     DISPLAY_NONE: 0x01, DISPLAY_FLEX: 0x02, DISPLAY_GRID: 0x03, DISPLAY_BLOCK: 0x04,
@@ -150,9 +177,9 @@ class TitanUniversalCss100Encoder {
         this.bytes.push(val & 0xFF);
     }
     pushString(str) {
-        const buf = Buffer.from(str || '', 'utf8');
-        this.pushU16(buf.length);
-        for (let b of buf) this.bytes.push(b);
+        const bytes = stringToUtf8Bytes(str || '');
+        this.pushU16(bytes.length);
+        for (let i = 0; i < bytes.length; i++) this.bytes.push(bytes[i]);
     }
 
     parseHexValid(hex) {
@@ -377,7 +404,11 @@ class TitanUniversalCss100Encoder {
         this.pushOp(OP.END);
     }
 
-    toBuffer() { return Buffer.from(this.bytes); }
+    toBuffer() {
+        return typeof Buffer !== 'undefined'
+            ? Buffer.from(this.bytes)
+            : new Uint8Array(this.bytes);
+    }
 }
 
 // ─── 7. UNIVERSAL DECODER ───────────────────────────────────────────────────
@@ -563,7 +594,7 @@ class TitanUniversalCss100Decoder {
                     const hi = buffer[pos++];
                     const lo = buffer[pos++];
                     const len = (hi << 8) | lo;
-                    rule = buffer.toString('utf8', pos, pos + len);
+                    rule = decodeUtf8Bytes(buffer, pos, pos + len);
                     pos += len;
                     break;
                 }
