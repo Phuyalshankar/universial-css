@@ -1,0 +1,41 @@
+{
+  "name": "universial-css",
+  "version": "1.0.0",
+  "description": "100% Tailwind & CSS compiled to 15KB Universal Binary Opcodes. Ultra-fast, zero-overhead styling for Web, Android, iOS, and MCU.",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "bin": {
+    "universial-css": "./bin/cli.js"
+  },
+  "keywords": [
+    "css",
+    "tailwind",
+    "tailwindcss",
+    "binary",
+    "opcodes",
+    "universal-css",
+    "universial-css",
+    "zero-runtime",
+    "ultra-fast",
+    "react",
+    "react-native",
+    "flutter",
+    "android",
+    "ios",
+    "titan-bus",
+    "iot"
+  ],
+  "author": "Shankar Phuyal <https://github.com/Phuyalshankar>",
+  "license": "MIT",
+  "homepage": "https://github.com/Phuyalshankar/universial-css#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Phuyalshankar/universial-css.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Phuyalshankar/universial-css/issues"
+  },
+  "scripts": {
+    "test": "node test.js"
+  }
+}
