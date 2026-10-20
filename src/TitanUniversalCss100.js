@@ -641,7 +641,7 @@ class TitanUniversalCss100Decoder {
     }
 }
 
-module.exports = {
+const UniversalEngineExports = {
     VERSION,
     MASK,
     OP,
@@ -654,3 +654,13 @@ module.exports = {
     TitanUniversalCss100Encoder,
     TitanUniversalCss100Decoder
 };
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = UniversalEngineExports;
+}
+if (typeof globalThis !== 'undefined') {
+    globalThis.TitanUniversalEngine = UniversalEngineExports;
+}
+if (typeof window !== 'undefined') {
+    window.TitanUniversalEngine = UniversalEngineExports;
+}

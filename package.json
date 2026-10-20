@@ -1,8 +1,11 @@
 {
   "name": "universial-css",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "100% Tailwind & CSS compiled to 15KB Universal Binary Opcodes. Ultra-fast, zero-overhead styling for Web, Android, iOS, and MCU.",
   "main": "index.js",
+  "browser": "dist/universal-css.min.js",
+  "unpkg": "dist/universal-css.min.js",
+  "jsdelivr": "dist/universal-css.min.js",
   "types": "index.d.ts",
   "bin": {
     "universial-css": "./bin/cli.js"
@@ -36,6 +39,7 @@
     "url": "https://github.com/Phuyalshankar/universial-css/issues"
   },
   "scripts": {
-    "test": "node test.js"
+    "test": "node tests/engine.test.js",
+    "build": "node scripts/build.js"
   }
 }
